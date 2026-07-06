@@ -285,8 +285,8 @@ def get_im2col_indices(images_shape, filter_shape, padding, stride = 1):
     i2 = stride * np.repeat(np.arange(output_height), output_width)
     j1 = np.tile(np.arange(filter_width), filter_height * channels)
     j2 = stride * np.tile(np.arange(output_width), output_height)
-    i = i1.reshape(-1, 1) + i2.reshape(-1, 1)
-    j = j1.reshape(-1, 1) + j2.reshape(-1, 1)
+    i = i1.reshape(-1, 1) + i2.reshape(1, -1)
+    j = j1.reshape(-1, 1) + j2.reshape(1, -1)
 
     k = np.repeat(np.arange(channels), filter_height * filter_width).reshape(-1, 1)
 
@@ -419,7 +419,7 @@ class BatchNormalization(Layer):
         
         # For backward pass
         self.X_centered = X - mean
-        self.inverse_standard_deviation = 1 / math.sqrt(var + self.epsilon)
+        self.inverse_standard_deviation = 1 / np.sqrt(var + self.epsilon)
 
         X_normalized = self.X_centered * self.inverse_standard_deviation
         output = self.gamma * X_normalized + self.beta
