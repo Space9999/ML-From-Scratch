@@ -16,7 +16,7 @@ class Base_Neural_Network():
             X, y = validation_data
             self.val_set = {"X" : X, "y" : y}
     
-    # Method used to freeze layer weights if needed
+    # Method used to freeze layer weights (only useful for layers in which this is applicable)
     def set_trainable(self, trainable):
         for layer in self.layers:
             layer.trainable = trainable
