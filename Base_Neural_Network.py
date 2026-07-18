@@ -50,7 +50,7 @@ class Base_Neural_Network():
     def fit(self, X, y, epochs, batch_size):
         training_loss = []
         val_loss = []
-        for i in range(epochs):
+        for _ in range(epochs):
             batch_loss = []
             for j in range(0, len(X), batch_size):
                 X_batch = X[j : j + batch_size]

@@ -4,7 +4,7 @@ def linear(output):
     return output
 
 def sigmoid(output):
-    return (1 + (1 / np.exp(-output)))
+    return 1 / (1 + np.exp(-output))
 
 def sigmoid_grad(output):
     return sigmoid(output) * (1 - sigmoid(output))
