@@ -47,18 +47,18 @@ class Layer(object):
 # Reference for all initial weight calculatons for all layers: https://www.geeksforgeeks.org/deep-learning/xavier-initialization/
 class Dense(Layer):
 
-    def __init__(self, n_units, input_shape = None):
-        self.input_shape = input_shape # Note: input_shape is a single digit specifying the number of neurons
-        self.n_units = n_units
+    def __init__(self, n_units, input_size = None):
+        self.input_size = input_size
+        self.n_units = n_units # Number of neurons
         self.layer_input = None
         self.trainable = True
         self.weight = None
         self.weight_bias = None
     
     def initialize_layer(self, optimizer):
-        limit = 1 / math.sqrt(self.input_shape[0])
+        limit = 1 / np.sqrt(self.input_size)
 
-        self.weight = np.random.uniform(-limit, limit, (self.input_shape[0], self.n_units))
+        self.weight = np.random.uniform(-limit, limit, (self.input_size, self.n_units))
 
         self.weight_bias = np.zeros((1, self.n_units))
 
@@ -93,15 +93,15 @@ class Dense(Layer):
     def get_output_shape(self):
         return (self.n_units, )
 
-# Recurrent neural network layer
+# Recurrent neural network layer with truncated backpropagation
 class RNN(Layer):
 
     """Bp_time_steps stands for backpropagation time steps"""
     def __init__(self, n_units, activation = 'tanh', activation_gradient = 'tanh_gradient', bp_time_steps = 5, input_shape = None):
         self.input_shape = input_shape
         self.n_units = n_units
-        self.activation = activation_functions[activation]()
-        self.activation_gradient = activation_gradients[activation_gradient]()
+        self.activation = activation_functions[activation]
+        self.activation_gradient = activation_gradients[activation_gradient]
         self.trainable = True
         self.bp_time_steps = bp_time_steps
         self.weight_previous = None # Previous state is related to hidden state
@@ -113,8 +113,8 @@ class RNN(Layer):
 
         limit = 1 / math.sqrt(input_dim)
         self.weight_input = np.random.uniform(-limit, limit, (self.n_units, input_dim)) # Input to hidden weights
-        limit = 1 / math.sqrt(self.n_units)
-        self.weight_output = np.random.uniform(-limit, limit, (self.n_units, input_dim)) # Hidden to output weights
+        limit = 1 / math.sqrt(self.n_units) # Change in column dimesion changes initialization
+        self.weight_output = np.random.uniform(-limit, limit, (input_dim, self.n_units)) # Hidden to output weights
         self.weight_previous = np.random.uniform(-limit, limit, (self.n_units, self.n_units)) # Hidden to hidden weights (recurrent weights)
 
         self.weight_previous_optimizer = copy.copy(optimizer)
@@ -130,15 +130,15 @@ class RNN(Layer):
 
         self.state_input = np.zeros((batch_size, timesteps, self.n_units))
         self.states = np.zeros((batch_size, timesteps + 1, self.n_units))
-        self.outputs = np.zeros((batch_size, timesteps + 1, input_dim))
+        self.outputs = np.zeros((batch_size, timesteps, input_dim))
 
         # Set last time step (t = -1) to zeros in order to prevent loop from crashing at t = 0
         self.states[:, -1] = np.zeros((batch_size, self.n_units))
 
         for t in range(timesteps):
             self.state_input[:, t] = input[:, t].dot(self.weight_input.T) + self.states[:, t - 1].dot(self.weight_previous.T)
-            self.states = self.activation(self.state_input[:, t])
-            self.outputs = self.states[:, t].dot(self.weight_output.T)
+            self.states[:, t] = self.activation(self.state_input[:, t])
+            self.outputs[:, t] = self.states[:, t].dot(self.weight_output.T)
         
         return self.outputs
     
@@ -153,16 +153,16 @@ class RNN(Layer):
 
         for t in reversed(range(timesteps)):
             weight_output_grad += accumulated_grad[:, t].T.dot(self.states[:, t])
-            weight_state_grad = accumulated_grad[:, t].T.dot(self.weight_output) * self.activation_gradient(self.state_input[:, t])
+            weight_state_grad = accumulated_grad[:, t].dot(self.weight_output) * self.activation_gradient(self.state_input[:, t])
             accumulated_grad_next[:, t] = weight_state_grad.dot(self.weight_input)
 
             # This is the loop where the back traversal happens
             for t2 in reversed(np.arange(max(0, t - self.bp_time_steps), t + 1)):
                 weight_input_grad += weight_state_grad.T.dot(self.layer_input[:, t2])
-                weight_previous_grad += weight_state_grad.T.dot(self.layer_input[:, t2 - 1])
+                weight_previous_grad += weight_state_grad.T.dot(self.states[:, t2 - 1])
 
                 # Calculate gradient for previous state
-                weight_state_grad = weight_state_grad.dot(self.weight_input) * self.activation_gradient(self.state_input[:, t2 - 1])
+                weight_state_grad = weight_state_grad.dot(self.weight_previous) * self.activation_gradient(self.state_input[:, t2 - 1])
 
         # Update all weights for next pass
         self.weight_input = self.weight_input_optimizer.update(self.weight_input, weight_input_grad)
@@ -176,11 +176,11 @@ class RNN(Layer):
 
 # Long short term memory (LSTM) which is essentially a RNN with more parameters
 class LSTM(Layer):
-    def __init__(self, mem_cells, bp_time_steps = 5, activations = ['tanh', 'sigmoid'], gradients = ['tanh_gradient', 'sigmoid_gradient']):
-        self.activation1 = activation_functions[activations[0]]()
-        self.activation_gradient1 = activation_gradients[gradients[0]]()
-        self.activation2 = activation_functions[activations[1]]()
-        self.activation_gradient2 = activation_gradients[gradients[1]]()
+    def __init__(self, mem_cells, input_shape, bp_time_steps = 5, activations = ['tanh', 'sigmoid'], gradients = ['tanh_gradient', 'sigmoid_gradient']):
+        self.activation1 = activation_functions[activations[0]]
+        self.activation_gradient1 = activation_gradients[gradients[0]]
+        self.activation2 = activation_functions[activations[1]]
+        self.activation_gradient2 = activation_gradients[gradients[1]]
         self.candidate_mem_weight = None
         self.input_weight = None
         self.forget_weight = None
@@ -192,11 +192,11 @@ class LSTM(Layer):
         self.mem_cells = mem_cells
         self.bp_time_steps = bp_time_steps
         self.hidden_input_concat = None
-        self.input_dim = None
+        self.input_shape = input_shape
 
     def initialize_layer(self, optimizer):
-        concatenation_length = self.x_dim + self.mem_cells
-        # Xavier initialization for RNN
+        concatenation_length = self.input_shape[1] + self.mem_cells
+        # Xavier initialization for RNN structures
         limit = np.sqrt(6.0 / (concatenation_length + self.mem_cells))
 
         self.candidate_mem_weight = np.random.uniform(-limit, limit, (self.mem_cells, concatenation_length))
@@ -204,20 +204,27 @@ class LSTM(Layer):
         self.output_weight = np.random.uniform(-limit, limit, (self.mem_cells, concatenation_length))
         self.forget_weight = np.random.uniform(-limit, limit, (self.mem_cells, concatenation_length))
 
+        limit = np.sqrt(6.0 / (self.input_shape[1] + self.mem_cells))
+        # Layer output refers to the output projection of hidden state (normally a dense layer would fill this role in most architectures)
+        self.layer_output_weight = np.random.uniform(-limit, limit, (self.input_shape[1], self.mem_cells))
+
         self.candidate_mem_weight_bias = np.zeros(self.mem_cells)
         self.input_weight_bias = np.zeros(self.mem_cells)
         self.output_weight_bias = np.zeros(self.mem_cells)
         self.forget_weight_bias = np.ones(self.mem_cells) # Common trick to improve training stability
+        self.layer_output_weight_bias = np.zeros(self.input_shape[1])
 
         self.candidate_mem_weight_optimizer = copy.copy(optimizer)
         self.input_weight_optimizer = copy.copy(optimizer)
         self.output_weight_optimizer = copy.copy(optimizer)
         self.forget_weight_optimizer = copy.copy(optimizer)
+        self.layer_output_weight_optimizer = copy.copy(optimizer)
 
         self.candidate_mem_weight_bias_optimizer = copy.copy(optimizer)
         self.input_weight_bias_optimizer = copy.copy(optimizer)
         self.output_weight_bias_optimizer = copy.copy(optimizer)
         self.forget_weight_bias_optimizer = copy.copy(optimizer)
+        self.layer_output_weight_bias_optimizer = copy.copy(optimizer)
 
     def forward_pass(self, input, training = True):
         self.layer_input = input
@@ -225,6 +232,7 @@ class LSTM(Layer):
         self.input_dim = input_dim
         self.states = np.zeros((batch_size, timesteps + 1, self.mem_cells))
         self.hidden_states = np.zeros((batch_size, timesteps + 1, self.mem_cells))
+        self.layer_output = np.zeros((batch_size, timesteps, self.input_shape[1]))
         self.inputs = np.zeros((batch_size, timesteps, self.mem_cells))
         self.outputs = np.zeros((batch_size, timesteps, self.mem_cells))
         self.candidate_mems = np.zeros((batch_size, timesteps, self.mem_cells))
@@ -249,34 +257,40 @@ class LSTM(Layer):
             self.outputs[:, t] = self.activation2(output_activation)
             self.states[:, t] = self.forgets[:, t] * self.states[:, t - 1] + self.inputs[:, t] * self.candidate_mems[:, t]
             self.hidden_states[:, t] = self.outputs[:, t] * self.activation1(self.states[:, t])
-
-        return self.states, self.hidden_states
+            self.layer_output[:, t] = self.hidden_states[:, t].dot(self.layer_output_weight.T) + self.layer_output_weight_bias
+            
+        return self.layer_output
         
-    def backward_pass(self, accumulated_grad_state, accumulated_grad_hidden):
-        _, timesteps, _ = accumulated_grad_state.shape
+    def backward_pass(self, accumulated_grad_hidden):
+        batch_size, timesteps, _ = accumulated_grad_hidden.shape
 
         weight_input_grad = np.zeros_like(self.input_weight)
         weight_output_grad = np.zeros_like(self.output_weight)
+        weight_layer_output_grad = np.zeros_like(self.layer_output_weight)
         weight_forget_grad = np.zeros_like(self.forget_weight)
         weight_candidate_mems_grad = np.zeros_like(self.candidate_mem_weight)
-        self.hidden_input_concat_grad = np.zeros_like(self.hidden_input_concat)
 
         input_weight_bias_grad = np.zeros_like(self.input_weight_bias)
         output_weight_bias_grad = np.zeros_like(self.output_weight_bias)
+        layer_output_weight_bias_grad = np.zeros_like(self.layer_output_weight_bias)
         forget_weight_bias_grad = np.zeros_like(self.forget_weight_bias)
         candidate_mem_weight_bias_grad = np.zeros_like(self.candidate_mem_weight_bias)
 
-        accumulated_grad_state_next = np.zeros_like(accumulated_grad_state)
-        accumulated_grad_hidden_next = np.zeros_like(accumulated_grad_hidden)
+        hidden_input_concat_grad = np.zeros_like(self.hidden_input_concat)
+        accumulated_grad_hidden_next = np.zeros_like((batch_size, timesteps, self.input_shape[1]))
 
         for t in reversed(range(timesteps)):
-            weight_state_diff = self.outputs[:, t] * accumulated_grad_hidden[:, t] + accumulated_grad_state[:, t]
-            weight_input_diff = self.candidate_mems[:, t] * weight_state_diff
-            weight_output_diff = self.states[:, t] * accumulated_grad_hidden[:, t]
-            weight_forget_diff = self.states[:, t - 1] * weight_state_diff
-            weight_candidate_mems_diff = self.inputs[:, t] * weight_state_diff
+            weight_layer_output_grad += accumulated_grad_hidden[:, t].T.dot(self.hidden_states[:, t])
+            accumulated_grad_hidden_output = accumulated_grad_hidden[:, t].dot(self.layer_output_weight)
+            weight_state_diff = (self.outputs[:, t] * accumulated_grad_hidden_output * 
+                                 self.activation_gradient1(self.states[:, t]))
 
             for t2 in reversed(np.arange(max(0, t - self.bp_time_steps), t + 1)):
+                weight_input_diff = self.candidate_mems[:, t2] * weight_state_diff
+                weight_output_diff = self.activation1(self.states[:, t2]) * accumulated_grad_hidden_output
+                weight_forget_diff = self.states[:, t2 - 1] * weight_state_diff
+                weight_candidate_mems_diff = self.inputs[:, t2] * weight_state_diff
+
                 weight_input_diff_chain = weight_input_diff * self.activation_gradient2(self.inputs[:, t2])
                 weight_output_diff_chain = weight_output_diff * self.activation_gradient2(self.outputs[:, t2])
                 weight_forget_diff_chain = weight_forget_diff * self.activation_gradient2(self.forgets[:, t2])
@@ -289,28 +303,35 @@ class LSTM(Layer):
 
                 input_weight_bias_grad += np.sum(weight_input_diff_chain, axis = 0)
                 output_weight_bias_grad += np.sum(weight_output_diff_chain, axis = 0)
+                layer_output_weight_bias_grad += np.sum(accumulated_grad_hidden[:, t], axis = 0)
                 forget_weight_bias_grad += np.sum(weight_forget_diff_chain, axis = 0)
                 candidate_mem_weight_bias_grad += np.sum(weight_candidate_mems_diff_chain, axis = 0)
 
-                self.hidden_input_concat_grad[t2] += weight_input_diff_chain.dot(self.input_weight)
-                self.hidden_input_concat_grad[t2] += weight_output_diff_chain.dot(self.output_weight)
-                self.hidden_input_concat_grad[t2] += weight_forget_diff_chain.dot(self.forget_weight)
-                self.hidden_input_concat_grad[t2] += weight_candidate_mems_diff_chain.dot(self.candidate_mem_weight)
+                hidden_input_concat_grad += weight_input_diff_chain.dot(self.input_weight)
+                hidden_input_concat_grad += weight_output_diff_chain.dot(self.output_weight)
+                hidden_input_concat_grad += weight_forget_diff_chain.dot(self.forget_weight)
+                hidden_input_concat_grad += weight_candidate_mems_diff_chain.dot(self.candidate_mem_weight)
 
-            accumulated_grad_state_next[:, t] = weight_state_diff * self.forgets[:, t]
-            accumulated_grad_hidden_next[:, t] = self.hidden_input_concat_grad[t, :, self.input_dim:]
+                accumulated_grad_hidden_next[:, t2] += hidden_input_concat_grad[:, :self.input_dim]
+                grad_hidden_previous = hidden_input_concat_grad[:, self.input_dim:]
+
+                weight_state_diff = (self.outputs[:, t2 - 1] * grad_hidden_previous * 
+                                    self.activation_gradient1(self.states[:, t2 - 1]) + 
+                                    weight_state_diff * self.forgets[:, t2])
 
         self.input_weight = self.input_weight_optimizer.update(self.input_weight, weight_input_grad)
         self.output_weight = self.output_weight_optimizer.update(self.output_weight, weight_output_grad)
+        self.layer_output_weight = self.layer_output_weight.update(self.layer_output_weight, weight_layer_output_grad)
         self.forget_weight = self.forget_weight_optimizer.update(self.forget_weight, weight_forget_grad)
         self.candidate_mem_weight = self.candidate_mem_weight_optimizer.update(self.candidate_mem_weight, weight_candidate_mems_grad)
 
         self.input_weight_bias = self.input_weight_bias_optimizer.update(self.input_weight_bias, input_weight_bias_grad)
         self.output_weight_bias = self.output_weight_bias_optimizer.update(self.output_weight_bias, output_weight_bias_grad)
+        self.layer_output_weight_bias = self.layer_output_weight_bias_optimizer.update(self.layer_output_weight_bias, layer_output_weight_bias_grad)
         self.forget_weight_bias = self.forget_weight_bias_optimizer.update(self.forget_weight_bias, forget_weight_bias_grad)
         self.candidate_mem_weight_bias = self.candidate_mem_weight_bias_optimizer.update(self.candidate_mem_weight_bias, candidate_mem_weight_bias_grad)
 
-        return accumulated_grad_state_next, accumulated_grad_hidden_next
+        return accumulated_grad_hidden_next
     
     def parameters(self):
         return (np.prod(self.input_weight.shape) + np.prod(self.output_weight.shape) + 
@@ -319,7 +340,7 @@ class LSTM(Layer):
                 np.prod(self.forget_weight_bias.shape) + np.prod(self.candidate_mem_weight_bias.shape))
     
     def get_output_shape(self):
-        return self.layer_input.shape       
+        return self.layer_output.shape      
 
 # 2D Convolution Layer
 class Conv2D(Layer):
