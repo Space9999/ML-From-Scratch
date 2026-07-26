@@ -1,6 +1,6 @@
 import numpy as np
-import math
-import random
+
+# Legacy Code (for reference purposes only)
 """
 class Gradient_Descent:
 
@@ -165,6 +165,14 @@ class Adam():
         self.weight_update = self.learning_rate * m_hat / (np.sqrt(v_hat) + self.epsilon)
 
         return weight - self.weight_update
+    
+def gradient_clip(gradient, max_norm = 5.0):
+    gradient_norm = np.linalg.norm(gradient)
+    
+    if gradient_norm > max_norm:
+        return gradient * (max_norm / gradient_norm)
+
+    return gradient
 
 
 
