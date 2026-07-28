@@ -114,7 +114,7 @@ class RNN(Layer):
 
         limit = 1 / math.sqrt(input_dim)
         self.weight_input = np.random.uniform(-limit, limit, (self.n_units, input_dim)) # Input to hidden weights
-        limit = 1 / math.sqrt(self.n_units) # Change in column dimesion changes initialization
+        limit = 1 / math.sqrt(self.n_units) # Change in column dimension changes initialization
         self.weight_output = np.random.uniform(-limit, limit, (input_dim, self.n_units)) # Hidden to output weights
         self.weight_previous = np.random.uniform(-limit, limit, (self.n_units, self.n_units)) # Hidden to hidden weights (recurrent weights)
 
