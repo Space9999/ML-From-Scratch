@@ -165,8 +165,10 @@ class Adam():
         self.weight_update = self.learning_rate * m_hat / (np.sqrt(v_hat) + self.epsilon)
 
         return weight - self.weight_update
-    
+
+# Gradient clipping by norm
 def gradient_clip(gradient, max_norm = 5.0):
+    # Calculates frobenius norm for matrix: https://mathworld.wolfram.com/FrobeniusNorm.html
     gradient_norm = np.linalg.norm(gradient)
     
     if gradient_norm > max_norm:

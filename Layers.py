@@ -26,9 +26,6 @@ activation_gradients = {
 
 class Layer(object):
 
-    def set_input_shape(self, input_shape):
-        self.input_shape = input_shape
-
     def get_layer_name(self):
         return self.__class__.__name__ # Returns name of the class
     
@@ -424,7 +421,7 @@ class Conv2D(Layer):
         
 
     def get_output_shape(self):
-        channels, height, width = self.input_shape
+        _, height, width = self.input_shape
         pad_height, pad_width = determine_padding(self.filter_shape, self.padding_type)
 
         output_height = int((height + np.sum(pad_height) - self.filter_shape[0]) / self.stride + 1)
