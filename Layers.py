@@ -297,6 +297,7 @@ class LSTM(Layer):
                 weight_forget_diff = self.states[:, t2 - 1] * weight_state_diff
                 weight_candidate_mems_diff = self.inputs[:, t2] * weight_state_diff
 
+                # Chain rule gets applied here (hence the naming scheme)
                 weight_input_diff_chain = weight_input_diff * self.activation_gradient2(self.inputs[:, t2])
                 weight_output_diff_chain = weight_output_diff * self.activation_gradient2(self.outputs[:, t2])
                 weight_forget_diff_chain = weight_forget_diff * self.activation_gradient2(self.forgets[:, t2])
@@ -313,13 +314,11 @@ class LSTM(Layer):
                 forget_weight_bias_grad += np.sum(weight_forget_diff_chain, axis = 0)
                 candidate_mem_weight_bias_grad += np.sum(weight_candidate_mems_diff_chain, axis = 0)
 
-                #print(weight_input_diff_chain.dot(self.input_weight).shape, hidden_input_concat_grad[t2].shape)
                 hidden_input_concat_grad[:, t2] += weight_input_diff_chain.dot(self.input_weight)
                 hidden_input_concat_grad[:, t2] += weight_output_diff_chain.dot(self.output_weight)
                 hidden_input_concat_grad[:, t2] += weight_forget_diff_chain.dot(self.forget_weight)
                 hidden_input_concat_grad[:, t2] += weight_candidate_mems_diff_chain.dot(self.candidate_mem_weight)
 
-                #print(accumulated_grad_hidden_next[:, t2].shape, hidden_input_concat_grad[:, :self.input_dim].shape, hidden_input_concat_grad.shape)
                 accumulated_grad_hidden_next[:, t2] += hidden_input_concat_grad[:, t2, :self.input_dim]
                 grad_hidden_previous = hidden_input_concat_grad[:, t2, self.input_dim:]
 
@@ -557,6 +556,7 @@ class Dropout(Layer):
         self.trainable = True
 
     # We want to keep the expected value of neurons if not training as the weights were adjusted with the dropout in mind
+    # i.e we want to mimick what happened during training if not training through expected value
     def forward_pass(self, X, training = True):
         temp_mask = (1 - self.probability)
         if training:
@@ -570,7 +570,7 @@ class Dropout(Layer):
     def get_output_shape(self):
         return self.input_shape
 
-# Normalizes activation output for a specific feature (rather than a specific sample as with layer normalization)
+# Normalizes activation output for a specific feature across a batch (rather than a specific sample as with layer normalization)
 class BatchNormalization(Layer):
 
     def __init__(self, momentum = 0.99):
