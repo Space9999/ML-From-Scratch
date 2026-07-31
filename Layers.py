@@ -41,49 +41,55 @@ class Layer(object):
     def get_output_shape(self):
         raise NotImplementedError()
 
-# A fully connected neural network layer
+# A fully connected neural network layer (equivalent with linear layer since there is no activation)
 # Reference for all initial weight calculatons for all layers: https://www.geeksforgeeks.org/deep-learning/xavier-initialization/
 class Dense(Layer):
 
-    def __init__(self, n_units, input_size = None):
+    def __init__(self, n_units, input_size = None, have_bias = True):
         self.input_size = input_size
         self.n_units = n_units # Number of neurons
         self.layer_input = None
         self.trainable = True
         self.weight = None
         self.weight_bias = None
+        self.have_bias = have_bias
     
     def initialize_layer(self, optimizer):
         limit = 1 / np.sqrt(self.input_size)
 
         self.weight = np.random.uniform(-limit, limit, (self.input_size, self.n_units))
 
-        self.weight_bias = np.zeros((1, self.n_units))
-
         # We want seperate optimizers as bias is not necessarily proportional to weight
         self.weight_optimizer = copy.copy(optimizer)
-        self.weight_bias_optimizer = copy.copy(optimizer)
+
+        if self.have_bias:
+            self.weight_bias_optimizer = copy.copy(optimizer)
+            self.weight_bias = np.zeros((1, self.n_units))
     
     def parameters(self):
-        return np.prod(self.weight.shape) + np.prod(self.weight_bias.shape)
+        if self.have_bias:
+            return np.prod(self.weight.shape) + np.prod(self.weight_bias.shape)
+        return np.prod(self.weight.shape)
     
     def forward_pass(self, input, training = True):
         self.layer_input = input
-        return input.dot(self.weight) + self.weight_bias
+        if self.have_bias:
+            return input.dot(self.weight) + self.weight_bias
+        return input.dot(self.weight)
     
     def backward_pass(self, accumulated_gradient):
         # Save weight from forward pass
         weight = self.weight
 
         if self.trainable:
-            # Calculation for applying gradient to weight and bias
-            """The weight bias is calculated through the sum of gradient vector components 
-            as each portion of weight gradient will contribute to a change in bias"""
             grad_weight = self.layer_input.T.dot(accumulated_gradient)
-            grad_weight_bias = np.sum(accumulated_gradient, axis = 0, keepdims = True)
-
             self.weight = self.weight_optimizer.update(self.weight, grad_weight)
-            self.weight_bias = self.weight_bias_optimizer.update(self.weight_bias, grad_weight_bias)
+            
+            """The weight bias is calculated through the sum of gradient vector components 
+                as each portion of weight gradient will contribute to a change in bias"""
+            if self.have_bias:
+                grad_weight_bias = np.sum(accumulated_gradient, axis = 0, keepdims = True)
+                self.weight_bias = self.weight_bias_optimizer.update(self.weight_bias, grad_weight_bias)
         
         accumulated_gradient = accumulated_gradient.dot(weight.T)
         return accumulated_gradient

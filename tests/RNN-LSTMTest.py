@@ -14,7 +14,7 @@ def generate_geometric_series(size):
         start = np.random.randint(1, 8)
         geom_series = np.geomspace(start = start, stop = start * 512, num = 10)
         X[i] = Data_Functions.to_categorical(geom_series, n_col = 48)
-        y[i] = np.roll(X[i], -1, axis = 0) #
+        y[i] = np.roll(X[i], -1, axis = 0)
     y[:, -1, 1] = 1 # Mark end of sequence
 
 def generate_arithmetic_series(size):
