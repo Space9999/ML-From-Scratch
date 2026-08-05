@@ -51,5 +51,5 @@ def softmax(output):
     return e_x / np.sum(e_x, axis = -1, keepdims = True)
 
 def softmax_grad(grad_output, softmax_output):
-    inner = np.sum(grad_output * softmax_output, axis=-1, keepdims=True)
+    inner = np.sum(grad_output * softmax_output, axis = -1, keepdims=True)
     return softmax_output * (grad_output - inner)
