@@ -1,6 +1,7 @@
 import numpy as np
 
 class Data_Functions():
+    
     def calculate_covariance_matrix(X, Y):
         n_samples = np.shape(X)[0]
         covariance_matrix = (X - X.mean(axis = 0)).T.dot(Y - Y.mean(axis = 0)) / (n_samples - 1)

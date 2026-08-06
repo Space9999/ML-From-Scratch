@@ -79,7 +79,7 @@ class Dense(Layer):
     
     def backward_pass(self, accumulated_gradient):
         # Save weight from forward pass
-        weight = self.weight
+        prev_weight = self.weight
 
         if self.trainable:
             grad_weight = self.layer_input.T.dot(accumulated_gradient)
@@ -91,7 +91,7 @@ class Dense(Layer):
                 grad_weight_bias = np.sum(accumulated_gradient, axis = 0, keepdims = True)
                 self.weight_bias = self.weight_bias_optimizer.update(self.weight_bias, grad_weight_bias)
         
-        accumulated_gradient = accumulated_gradient.dot(weight.T)
+        accumulated_gradient = accumulated_gradient.dot(prev_weight.T)
         return accumulated_gradient
 
     def get_output_shape(self):
@@ -620,8 +620,9 @@ class BatchNormalization(Layer):
 
     def backward_pass(self, accum_grad):
         # Save values from forward pass
-        gamma = self.gamma
+        prev_gamma = self.gamma
 
+        # Update weights if trainable
         if self.trainable:
             X_normalized = self.X_centered * self.inverse_standard_deviation
             grad_gamma = np.sum(accum_grad * X_normalized, axis = 0)
@@ -633,15 +634,82 @@ class BatchNormalization(Layer):
         batch_size = accum_grad.shape[0]
 
         # The gradient of loss with respect to layer inputs
-        accum_grad = (1 / batch_size) * gamma * self.inverse_standard_deviation * (batch_size * accum_grad - 
-                                                                                   np.sum(accum_grad, axis = 0)
-                                                                                   - self.X_centered * self.inverse_standard_deviation ** 2
-                                                                                   * np.sum(accum_grad * self.X_centered, axis = 0))
+        accum_grad = (1 / batch_size) * (prev_gamma * self.inverse_standard_deviation * batch_size * accum_grad - 
+                                        np.sum(accum_grad, axis = 0) - self.X_centered * self.inverse_standard_deviation ** 2
+                                        * np.sum(accum_grad * self.X_centered, axis = 0))
         
         return accum_grad
     
     def get_output_shape(self):
         return self.input_shape
+    
+# Like batch normalization but for a sample
+class LayerNormalization(Layer):
+
+    def __init__(self, momentum = 0.99):
+        self.momentum = momentum
+        self.trainable = True
+        self.epsilon = 0.01
+        self.running_mean = None
+        self.running_var = None
+
+    def initialize_layer(self, optimizer):
+        self.gamma = np.ones(self.input_shape)
+        self.beta = np.zeros(self.input_shape)
+        self.gamma_optimizer = copy.copy(optimizer)
+        self.beta_optimizer = copy.copy(optimizer)
+
+    def parameters(self):
+        return np.prod(self.gamma.shape) + np.prod(self.beta.shape)
+
+    def forward_pass(self, X, training = True):
+        # Initialize mean on first run
+        if self.running_mean is None:
+            self.running_mean = np.mean(X, axis = 1, keepdims = True)
+            self.running_var = np.var(X, axis = 1, keepdims = True)
+        
+        if training and self.trainable:
+            mean = np.mean(X, axis = 1, keepdims = True)
+            var = np.var(X, axis = 1, keepdims = True)
+            # Exponential running mean and variance
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean
+            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var
+        
+        else:
+            mean = self.running_mean
+            var = self.running_var
+        
+        # For backward pass
+        self.X_centered = X - mean
+        self.inverse_standard_deviation = 1 / np.sqrt(var + self.epsilon)
+
+        X_normalized = self.X_centered * self.inverse_standard_deviation
+        output = self.gamma * X_normalized + self.beta
+
+        return output
+
+    def backward_pass(self, accum_grad):
+        # Save values from forward pass
+        prev_gamma = self.gamma
+
+        # Update weights if trainable
+        if self.trainable:
+            X_normalized = self.X_centered * self.inverse_standard_deviation
+            grad_gamma = np.sum(accum_grad * X_normalized, axis = 0)
+            grad_beta = np.sum(accum_grad, axis = 0)
+
+            self.gamma = self.gamma_optimizer.update(self.gamma, grad_gamma)
+            self.beta = self.beta_optimizer.update(self.beta, grad_beta)
+        
+        feature_length = accum_grad.shape[1]
+
+        # The gradient of loss with respect to layer inputs
+        accum_grad = (1 / feature_length) * (prev_gamma * self.inverse_standard_deviation * feature_length * accum_grad - 
+                                            np.sum(accum_grad, axis = 1, keepdims = True) - self.X_centered * 
+                                            self.inverse_standard_deviation ** 2 * 
+                                            np.sum(accum_grad * self.X_centered, axis = 1, keepdims = True))
+        
+        return accum_grad
 
 # Flattens multidimesional matrix into 2-D matrix
 class Flatten(Layer):
