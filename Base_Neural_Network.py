@@ -3,7 +3,7 @@ import numpy as np
 class Base_Neural_Network():
 
     # Validation data must be in a tuple format (X set, y set)
-    def __init__(self, optimizer, loss, loss_grad, validation_data = None):
+    def __init__(self, optimizer = None, loss = None, loss_grad = None, validation_data = None):
         self.optimizer = optimizer
         self.layers = []
         self.errors = {"training": [], "validation": []}

@@ -94,6 +94,9 @@ class Dense(Layer):
         accumulated_gradient = accumulated_gradient.dot(prev_weight.T)
         return accumulated_gradient
 
+    def get_weight(self):
+        return self.weight
+
     def get_output_shape(self):
         return (self.n_units, )
 
@@ -569,6 +572,9 @@ class Dropout(Layer):
     
     def backward_pass(self, accum_grad):
         return accum_grad * self.mask
+
+    def parameters(self):
+        return 0
     
     def get_output_shape(self):
         return self.input_shape
@@ -725,6 +731,9 @@ class Flatten(Layer):
     
     def backward_pass(self, accum_grad):
         return accum_grad.reshape(self.previous_shape)
+
+    def parameters(self):
+        return 0
     
     # Note: This is the output shape of one specific sample (the -1 dimesion is the sample dimesion in the forward pass)
     def get_output_shape(self):
