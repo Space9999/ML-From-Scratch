@@ -653,7 +653,6 @@ class BatchNormalization(Layer):
         return self.input_shape
     
 # Like batch normalization but for a sample
-# Note: Please use evenly-sized batches if you want to use this layer
 class LayerNormalization(Layer):
 
     def __init__(self, momentum = 0.99):
