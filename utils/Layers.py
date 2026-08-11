@@ -1,8 +1,8 @@
 import numpy as np
 import math
 import copy
-import Activations_Functions
-from Optimizers import gradient_clip
+import utils.Activations_Functions as Activations_Functions
+from utils.Optimizers import gradient_clip
 
 activation_functions = {
     'tanh': Activations_Functions.tanh,
@@ -41,12 +41,15 @@ class Layer(object):
     def get_output_shape(self):
         raise NotImplementedError()
 
+    def set_input_shape(self, shape):
+        self.input_shape = shape
+
 # A fully connected neural network layer (equivalent with linear layer since there is no activation)
 # Reference for all initial weight calculatons for all layers: https://www.geeksforgeeks.org/deep-learning/xavier-initialization/
 class Dense(Layer):
 
-    def __init__(self, n_units, input_size = None, have_bias = True):
-        self.input_size = input_size
+    def __init__(self, n_units, input_shape = None, have_bias = True):
+        self.input_shape = input_shape
         self.n_units = n_units # Number of neurons
         self.layer_input = None
         self.trainable = True
@@ -55,9 +58,9 @@ class Dense(Layer):
         self.have_bias = have_bias
     
     def initialize_layer(self, optimizer):
-        limit = 1 / np.sqrt(self.input_size)
+        limit = 1 / np.sqrt(self.input_shape[0])
 
-        self.weight = np.random.uniform(-limit, limit, (self.input_size, self.n_units))
+        self.weight = np.random.uniform(-limit, limit, (self.input_shape[0], self.n_units))
 
         # We want seperate optimizers as bias is not necessarily proportional to weight
         self.weight_optimizer = copy.copy(optimizer)
@@ -333,17 +336,17 @@ class LSTM(Layer):
                                     weight_state_diff * self.forgets[:, t2])
 
         # Limit gradient norms (alleviates exploding gradients)
-        weight_input_grad = gradient_clip(weight_input_grad, max_norm = 1.0)
-        weight_output_grad = gradient_clip(weight_output_grad, max_norm = 1.0)
-        weight_layer_output_grad = gradient_clip(weight_layer_output_grad, max_norm = 1.0)
-        weight_forget_grad = gradient_clip(weight_forget_grad, max_norm = 1.0)
-        weight_candidate_mems_grad = gradient_clip(weight_candidate_mems_grad, max_norm = 1.0)
+        weight_input_grad = gradient_clip(weight_input_grad, max_norm = 0.25)
+        weight_output_grad = gradient_clip(weight_output_grad, max_norm = 0.25)
+        weight_layer_output_grad = gradient_clip(weight_layer_output_grad, max_norm = 0.25)
+        weight_forget_grad = gradient_clip(weight_forget_grad, max_norm = 0.25)
+        weight_candidate_mems_grad = gradient_clip(weight_candidate_mems_grad, max_norm = 0.25)
 
-        input_weight_bias_grad = gradient_clip(input_weight_bias_grad, max_norm = 1.0)
-        output_weight_bias_grad = gradient_clip(output_weight_bias_grad, max_norm = 1.0)
-        layer_output_weight_bias_grad = gradient_clip(layer_output_weight_bias_grad, max_norm = 1.0)
-        forget_weight_bias_grad = gradient_clip(forget_weight_bias_grad, max_norm = 1.0)
-        candidate_mem_weight_bias_grad = gradient_clip(candidate_mem_weight_bias_grad, max_norm = 1.0)
+        input_weight_bias_grad = gradient_clip(input_weight_bias_grad, max_norm = 0.25)
+        output_weight_bias_grad = gradient_clip(output_weight_bias_grad, max_norm = 0.25)
+        layer_output_weight_bias_grad = gradient_clip(layer_output_weight_bias_grad, max_norm = 0.25)
+        forget_weight_bias_grad = gradient_clip(forget_weight_bias_grad, max_norm = 0.25)
+        candidate_mem_weight_bias_grad = gradient_clip(candidate_mem_weight_bias_grad, max_norm = 0.25)
 
         self.input_weight = self.input_weight_optimizer.update(self.input_weight, weight_input_grad)
         self.output_weight = self.output_weight_optimizer.update(self.output_weight, weight_output_grad)
@@ -650,6 +653,7 @@ class BatchNormalization(Layer):
         return self.input_shape
     
 # Like batch normalization but for a sample
+# Note: Please use evenly-sized batches if you want to use this layer
 class LayerNormalization(Layer):
 
     def __init__(self, momentum = 0.99):
@@ -677,6 +681,7 @@ class LayerNormalization(Layer):
         if training and self.trainable:
             mean = np.mean(X, axis = 1, keepdims = True)
             var = np.var(X, axis = 1, keepdims = True)
+            
             # Exponential running mean and variance
             self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean
             self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var
@@ -684,7 +689,7 @@ class LayerNormalization(Layer):
         else:
             mean = self.running_mean
             var = self.running_var
-        
+
         # For backward pass
         self.X_centered = X - mean
         self.inverse_standard_deviation = 1 / np.sqrt(var + self.epsilon)
@@ -716,6 +721,9 @@ class LayerNormalization(Layer):
                                             np.sum(accum_grad * self.X_centered, axis = 1, keepdims = True))
         
         return accum_grad
+
+    def get_output_shape(self):
+        return self.input_shape
 
 # Flattens multidimesional matrix into 2-D matrix
 class Flatten(Layer):

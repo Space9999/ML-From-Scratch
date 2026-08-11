@@ -1,12 +1,17 @@
-import Base_Neural_Network as NN
-import Optimizers
-import Loss_Functions
-from Layers import Dense, Activation
-from Data_Functions import Data_Functions
-from PCA import PCA
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.Base_Neural_Network import Base_Neural_Network
+from utils import Optimizers
+from utils import Loss_Functions
+from utils.Layers import Dense, Activation
+from utils.Data_Functions import Data_Functions
+from utils.PCA import PCA
+import numpy as np
 
 from sklearn import datasets
-import numpy as np
 import matplotlib.pyplot as plt
 
 data = datasets.load_digits()
@@ -26,8 +31,8 @@ n_samples, n_features = np.shape(X)
 
 X_train, X_test, y_train, y_test = Data_Functions.train_test_split(X, y, test_size = 0.5)
 
-mlp = NN.Base_Neural_Network(optimizer = Optimizers.Adam(), loss = Loss_Functions.categorical_cross_entropy, loss_grad = Loss_Functions.categorical_cross_entropy_grad)
-mlp.add(Dense(input_shape = n_features, n_units = 64))
+mlp = Base_Neural_Network(optimizer = Optimizers.Adam(), loss = Loss_Functions.categorical_cross_entropy, loss_grad = Loss_Functions.categorical_cross_entropy_grad)
+mlp.add(Dense(input_shape = (n_features, ), n_units = 64))
 mlp.add(Activation('relu'))
 mlp.add(Dense(n_units = 64))
 mlp.add(Activation('relu'))

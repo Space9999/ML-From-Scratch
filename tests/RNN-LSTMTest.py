@@ -1,11 +1,16 @@
-from matplotlib import pyplot as plt
+import os
+import sys
 
-import Base_Neural_Network as NN
-import Optimizers
-import Loss_Functions
-from Layers import RNN, LSTM, Activation, BatchNormalization
-from Data_Functions import Data_Functions
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.Base_Neural_Network import Base_Neural_Network
+from utils import Optimizers
+from utils import Loss_Functions
+from utils.Layers import Activation, RNN, LSTM, BatchNormalization, LayerNormalization
+from utils.Data_Functions import Data_Functions
+
 import numpy as np
+from matplotlib import pyplot as plt
 
 def generate_geometric_series(size):
     X = np.zeros([size, 10, 18], dtype = float)
@@ -28,17 +33,16 @@ def generate_arithmetic_series(size):
     y[:, -1, 1] = 1 # Mark end of sequence
     return X, y
 
-X, y = generate_arithmetic_series(2800)
-X_train, X_test, y_train, y_test = Data_Functions.train_test_split(X, y, test_size = 0.4)
+X, y = generate_arithmetic_series(3000)
+X_train, X_test, y_train, y_test = Data_Functions.train_test_split(X, y, test_size = 0.5)
 
-rnn = NN.Base_Neural_Network(optimizer = Optimizers.Adam(), loss = Loss_Functions.categorical_cross_entropy, loss_grad = Loss_Functions.categorical_cross_entropy_grad)
+rnn = Base_Neural_Network(optimizer = Optimizers.Adam(), loss = Loss_Functions.categorical_cross_entropy, loss_grad = Loss_Functions.categorical_cross_entropy_grad)
 rnn.add(RNN(n_units = 10, activation = "tanh", bp_time_steps = 5, input_shape = (10, 18)))
 rnn.add(BatchNormalization())
 rnn.add(Activation("softmax"))
 
-lstm = NN.Base_Neural_Network(optimizer = Optimizers.Adam(), loss = Loss_Functions.categorical_cross_entropy, loss_grad = Loss_Functions.categorical_cross_entropy_grad)
-lstm.add(LSTM(mem_cells = 10, bp_time_steps = 5, input_shape = (10, 18)))
-lstm.add(BatchNormalization())
+lstm = Base_Neural_Network(optimizer = Optimizers.Adam(), loss = Loss_Functions.categorical_cross_entropy, loss_grad = Loss_Functions.categorical_cross_entropy_grad)
+lstm.add(LSTM(mem_cells = 10, bp_time_steps = 2, input_shape = (10, 18)))
 lstm.add(Activation("softmax"))
 
 epochs_RNN = 650

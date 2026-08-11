@@ -1,8 +1,13 @@
-from Base_Neural_Network import Base_Neural_Network
-import Optimizers
-import Loss_Functions
-from Layers import Dense, Activation, Dropout, BatchNormalization, Flatten, Conv2D
-from Data_Functions import Data_Functions
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.Base_Neural_Network import Base_Neural_Network
+from utils import Optimizers
+from utils import Loss_Functions
+from utils.Layers import Dense, Activation, Dropout, BatchNormalization, Flatten, Conv2D
+from utils.Data_Functions import Data_Functions 
 
 from sklearn import datasets
 import matplotlib.pyplot as plt

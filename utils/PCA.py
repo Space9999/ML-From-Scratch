@@ -1,5 +1,5 @@
 import numpy as np
-from Data_Functions import Data_Functions
+from utils.Data_Functions import Data_Functions
 
 # Principal Component Analysis
 # Method for reducing dimensionality of given feature space and maximizing variance on each feature axis

@@ -2,7 +2,9 @@ import numpy as np
 
 class Data_Functions():
     
-    def calculate_covariance_matrix(X, Y):
+    def calculate_covariance_matrix(X, Y = None):
+        if Y is None:
+            Y = X
         n_samples = np.shape(X)[0]
         covariance_matrix = (X - X.mean(axis = 0)).T.dot(Y - Y.mean(axis = 0)) / (n_samples - 1)
 
