@@ -1,3 +1,4 @@
 .pycache/
 .vscode/
-.utils/pycache
+utils/__pycache__/
+
