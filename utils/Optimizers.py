@@ -133,7 +133,7 @@ class Simplified_SGD():
 
     def update(self, weight, gradient_weight):
         if self.weight_update is None:
-            self.weight_update = np.zeros(np.shape(weight))
+            self.weight_update = np.zeros_like(weight)
 
         self.weight_update = self.momentum + self.weight_update + (1 - self.momentum) * gradient_weight
 
@@ -152,8 +152,8 @@ class Adam():
     
     def update(self, weight, grad_weight):
         if self.m is None:
-            self.m = np.zeros(np.shape(grad_weight))
-            self.v = np.zeros(np.shape(grad_weight))
+            self.m = np.zeros_like(grad_weight)
+            self.v = np.zeros_like(grad_weight)
         
         self.m = self.b1 * self.m + (1 - self.b1) * grad_weight
         self.v = self.b2 * self.v + (1 - self.b2) * grad_weight ** 2

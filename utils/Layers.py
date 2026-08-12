@@ -659,8 +659,8 @@ class LayerNormalization(Layer):
         self.momentum = momentum
         self.trainable = True
         self.epsilon = 0.01
-        self.running_mean = None
-        self.running_var = None
+        self.prev_mean = None
+        self.prev_var = None
 
     def initialize_layer(self, optimizer):
         self.gamma = np.ones(self.input_shape)
@@ -672,23 +672,20 @@ class LayerNormalization(Layer):
         return np.prod(self.gamma.shape) + np.prod(self.beta.shape)
 
     def forward_pass(self, X, training = True):
-        # Initialize mean on first run
-        if self.running_mean is None:
-            self.running_mean = np.mean(X, axis = 1, keepdims = True)
-            self.running_var = np.var(X, axis = 1, keepdims = True)
-        
         if training and self.trainable:
             mean = np.mean(X, axis = 1, keepdims = True)
             var = np.var(X, axis = 1, keepdims = True)
-            
-            # Exponential running mean and variance
-            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean
-            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var
-        
+            self.prev_mean = mean
+            self.prev_var = var
         else:
-            mean = self.running_mean
-            var = self.running_var
-
+            mean = self.prev_mean
+            var = self.prev_var
+            batch_size = X.shape[0]
+            # Mean and variance have same shape
+            prev_shape = (mean.shape[1], mean.shape[2]) 
+            mean.resize((batch_size, prev_shape[0], prev_shape[1]), refcheck = False)
+            var.resize((batch_size, prev_shape[0], prev_shape[1]), refcheck = False)
+            
         # For backward pass
         self.X_centered = X - mean
         self.inverse_standard_deviation = 1 / np.sqrt(var + self.epsilon)
