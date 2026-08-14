@@ -44,8 +44,8 @@ class Layer(object):
     def set_input_shape(self, shape):
         self.input_shape = shape
 
-# A fully connected neural network layer (equivalent with linear layer since there is no activation)
 # Reference for all initial weight calculatons for all layers: https://www.geeksforgeeks.org/deep-learning/xavier-initialization/
+# A fully connected neural network layer (equivalent with linear layer since there is no activation)
 class Dense(Layer):
 
     def __init__(self, n_units, input_shape = None, have_bias = True):
@@ -97,8 +97,12 @@ class Dense(Layer):
         accumulated_gradient = accumulated_gradient.dot(prev_weight.T)
         return accumulated_gradient
 
-    def get_weight(self):
+    # For embedding layer
+    def get_weight(self): 
         return self.weight
+
+    def set_weight(self, weight):
+        self.weight = weight
 
     def get_output_shape(self):
         return (self.n_units, )
@@ -119,7 +123,7 @@ class RNN(Layer):
         self.weight_output = None 
     
     def initialize_layer(self, optimizer):
-        input_dim = self.input_shape[1] # Input dimension is the number of columns
+        input_dim = self.input_shape[1]
 
         limit = 1 / math.sqrt(input_dim)
         self.weight_input = np.random.uniform(-limit, limit, (self.n_units, input_dim)) # Input to hidden weights

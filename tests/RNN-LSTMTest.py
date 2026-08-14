@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.Base_Neural_Network import Base_Neural_Network
 from utils import Optimizers
 from utils import Loss_Functions
-from utils.Layers import Activation, RNN, LSTM, BatchNormalization, LayerNormalization
+from utils.Layers import Activation, RNN, LSTM, BatchNormalization
 from utils.Data_Functions import Data_Functions
 
 import numpy as np

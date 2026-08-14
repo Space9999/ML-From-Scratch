@@ -26,7 +26,7 @@ class Base_Neural_Network():
         if self.layers:
             layer.set_input_shape(self.layers[-1].get_output_shape())
 
-        # If the layer needs to be initialized, then initalize layer with appropriate optimizer and weights
+        # If the layer can be initialized, then initialize layer with appropriate optimizer and weights
         if hasattr(layer, 'initialize_layer'):
             layer.initialize_layer(optimizer = self.optimizer)
         
