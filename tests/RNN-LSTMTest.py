@@ -12,16 +12,6 @@ from utils.Data_Functions import Data_Functions
 import numpy as np
 from matplotlib import pyplot as plt
 
-def generate_geometric_series(size):
-    X = np.zeros([size, 10, 18], dtype = float)
-    y = np.zeros([size, 10, 18], dtype = float)
-    for i in range(size):
-        start = np.random.randint(1, 8)
-        geom_series = np.geomspace(start = start, stop = start * 512, num = 10)
-        X[i] = Data_Functions.to_categorical(geom_series, n_col = 48)
-        y[i] = np.roll(X[i], -1, axis = 0)
-    y[:, -1, 1] = 1 # Mark end of sequence
-
 def generate_arithmetic_series(size):
     X = np.zeros([size, 10, 18], dtype = float)
     y = np.zeros([size, 10, 18], dtype = float)
