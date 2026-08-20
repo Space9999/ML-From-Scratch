@@ -1,4 +1,5 @@
 import re
+import numpy as np
 
 class Vocabulary:
     BOS = "BOS"
@@ -34,8 +35,22 @@ class Vocabulary:
         tokens = self.tokenize(sentence, add_special_tokens)
         return [self.token2index[token] for token in tokens]
 
-    def decode(self, indices):
-        return [self.index2token[index] for index in indices]
+    def batch_encode(self, sentences, add_special_tokens = False):
+        encoded_sentences = [self.encode(sentence, add_special_tokens) for sentence in sentences]
+        if add_special_tokens:
+            max_length = max([len(tokens) for tokens in encoded_sentences])
+            encoded_sentences = [
+                # Add the appropriate amount of padding tokens
+                sent + ((max_length - len(sent)) * [self.token2index[self.PAD]])
+                for sent in encoded_sentences
+            ]
+        return np.array(encoded_sentences)
+
+    def get_token2index(self):
+        return self.token2index
+
+    def get_index2token(self):
+        return self.index2token
 
 
 

@@ -181,7 +181,6 @@ class Encoder():
             self.encoder_blocks.append(EncoderBlock(hidden_dim, feedforward_dim, num_heads, dropout_probability))
         
     def forward_pass(self, input_ids, source_padding_mask):
-        # TODO: Convert input_ids into tokens (words) through vocab
         output = self.embedding.getEmbedding(input_ids) * math.sqrt(self.hidden_dim)
         output = self.positional_encoding.forward_pass(output)
         output = self.dropout.forward_pass(output)

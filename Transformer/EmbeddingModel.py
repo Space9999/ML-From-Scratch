@@ -9,9 +9,9 @@ import numpy as np
 class EmbeddingModel():
 
     def __init__(self, vocab_size, embedding_dim, padding_index = None):
-        self.vocab_size = self.vocab_size
-        self.embedding_dim = self.embedding_dim
-        self.padding_index = self.padding_index
+        self.vocab_size = vocab_size
+        self.embedding_dim = embedding_dim
+        self.padding_index = padding_index
 
     def generate_training_data(self, one_hot_encodings, context_window = 2):
         X = []
