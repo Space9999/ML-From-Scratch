@@ -619,6 +619,7 @@ class BatchNormalization(Layer):
             self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var
         
         else:
+            # Use most recent running_mean
             mean = self.running_mean
             var = self.running_var
         
@@ -659,8 +660,7 @@ class BatchNormalization(Layer):
 # Like batch normalization but for a sample
 class LayerNormalization(Layer):
 
-    def __init__(self, momentum = 0.99):
-        self.momentum = momentum
+    def __init__(self):
         self.trainable = True
         self.epsilon = 0.01
         self.prev_mean = None
