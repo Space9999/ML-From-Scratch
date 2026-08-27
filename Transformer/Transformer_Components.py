@@ -76,7 +76,7 @@ class MultiHeadAttention():
     def forward_pass(self, input, encoder_hidden_states = None, source_padding_mask = None, future_mask = None):
         batch_size, sequence_length, hidden_dim = input.size()
 
-        # Input should be the decoder hidden states
+        # "input" variable should be the decoder hidden states
         if encoder_hidden_states is None:
             query, key, value = self.self_attention_projection(input)
         else:
@@ -120,9 +120,9 @@ class EncoderBlock():
         self.mha = MultiHeadAttention(hidden_dim, num_heads)
 
         self.feedforward = NN.Base_Neural_Network(loss = Loss_Functions.categorical_cross_entropy)
-        self.feedforward.add(Dense(input_size = hidden_dim, n_units = feedforward_dim))
+        self.feedforward.add(Dense(input_size = hidden_dim, n_units = feedforward_dim, have_bias = False))
         self.feedforward.add(Activation("relu"))
-        self.feedforward.add(Dense(input_size = feedforward_dim, n_units = hidden_dim))
+        self.feedforward.add(Dense(input_size = feedforward_dim, n_units = hidden_dim, have_bias = False))
 
         self.dropout1 = Dropout(dropout_probability)
         self.dropout2 = Dropout(dropout_probability)
@@ -145,9 +145,9 @@ class DecoderBlock():
         self.self_mha = MultiHeadAttention(hidden_dim, num_heads)
 
         self.feedforward = NN.Base_Neural_Network(loss = Loss_Functions.categorical_cross_entropy)
-        self.feedforward.add(Dense(input_size = hidden_dim, n_units = feedforward_dim))
+        self.feedforward.add(Dense(input_size = hidden_dim, n_units = feedforward_dim, have_bias = False))
         self.feedforward.add(Activation("relu"))
-        self.feedforward.add(Dense(input_size = feedforward_dim, n_units = hidden_dim))
+        self.feedforward.add(Dense(input_size = feedforward_dim, n_units = hidden_dim, have_bias = False))
 
         self.dropout1 = Dropout(dropout_probability)
         self.dropout2 = Dropout(dropout_probability)
@@ -202,13 +202,13 @@ class Decoder():
 
         self.output_layer = Dense(hidden_dim, vocab_size, have_bias = False)
             
-    def forward_pass(self, input_tokens, source_padding_mask):
+    def forward_pass(self, input_tokens, encoder_hidden_states, source_padding_mask, future_mask):
         output = self.embedding.getEmbedding(input_tokens) * math.sqrt(self.hidden_dim)
         output = self.positional_encoding.forward_pass(output)
         output = self.dropout.forward_pass(output)
 
-        for encoder_block in self.encoder_blocks:
-            output = encoder_block.forward_pass(output, source_padding_mask)
+        for decoder_block in self.decoder_blocks:
+            output = decoder_block.forward_pass(output, encoder_hidden_states, source_padding_mask, future_mask)
 
         output = self.output_layer.forward_pass(output)
         return output

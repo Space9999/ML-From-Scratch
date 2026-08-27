@@ -5,7 +5,8 @@ def get_future_mask(sequence_len):
     future_mask = np.triu(np.full((sequence_len, sequence_len), 1), k = 1)
     return future_mask == 0
 
-def construct_batches(corpus, vocab, batch_size, src_key, tgt_key):
+# Returns batches and masks seperated by source and target
+def get_batches_and_masks(corpus, vocab, batch_size, src_key, tgt_key):
     pad_token_id = vocab.get_token2index()[vocab.PAD]
     batches = {"src": [], "tgt": []}
     masks = {"src": [], "tgt": []}

@@ -1,5 +1,7 @@
 from Transformer_Components import Encoder, Decoder
 from EmbeddingModel import EmbeddingModel
+from utils.Loss_Functions import categorical_cross_entropy, categorical_cross_entropy_grad
+import numpy as np
 
 class Transformer():
 
@@ -16,5 +18,36 @@ class Transformer():
         self.max_decoding_length = max_decoding_length
         self.hidden_dim = hidden_dim
 
-    def train_transformer():
-        
+    def train_transformer(self, epochs, batches, masks):
+        for epoch in range(epochs):
+            # Iterates through rows of batches appended with appropriate masks
+            for i, (src_batch, src_mask, tgt_batch, tgt_mask) in enumerate(
+                zip(batches["src"], masks["src"], batches["tgt"], masks["tgt"])
+            ):
+                encoder_output = self.encoder.forward_pass(src_batch, src_mask)
+                decoder_output = self.decoder.forward_pass(tgt_batch, encoder_output,
+                                                           src_mask, tgt_mask)
+                # Last decoder output is meaningless as it does not have a target token
+                decoder_output = decoder_output[:, :-1, :]
+                # The BOS token should not be included in loss
+                tgt_batch = tgt_batch[:, 1:]
+
+                # Ignore padding values in loss and accuracy using mask
+                tgt_padding_mask = tgt_batch != self.padding_index
+
+                batch_loss = categorical_cross_entropy(tgt_batch[tgt_padding_mask], decoder_output.transpose(0, 2, 1))
+
+                batch_accuracy = (np.sum(decoder_output.argmax(dim = -1) == tgt_batch)) / tgt_batch.size
+
+                
+
+
+                
+
+
+
+                
+
+                
+
+
