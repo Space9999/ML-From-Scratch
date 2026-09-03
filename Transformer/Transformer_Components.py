@@ -4,6 +4,10 @@ from utils.Layers import Dense, Activation, Dropout, LayerNormalization
 import utils.Activations_Functions as Activations_Functions
 import utils.Base_Neural_Network as NN
 import utils.Loss_Functions as Loss_Functions
+import utils.Optimizers as Optimizers
+
+# Fixed optimizer for all used layers
+optimizer = Optimizers.Adam()
 
 # Reference: https://brandonrohrer.com/transformers.html
 class MultiHeadAttention():
@@ -14,8 +18,9 @@ class MultiHeadAttention():
         self.qkv_dim = hidden_dim // num_heads
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
+        self.isSelfAttention = False
 
-        # The 3 comes from the concatentation of the query, key, and value matrices
+        # The 3 comes from the resblock_output_resentation of the query, key, and value matrices
         self.qkv_projection = Dense(input_size = hidden_dim, n_units = 3 * num_heads * self.qkv_dim, have_bias = False)
 
         # For cross attention only
@@ -24,9 +29,10 @@ class MultiHeadAttention():
 
         self.output_projection = Dense(input_size = num_heads * self.qkv_dim, n_units = hidden_dim, have_bias = False)
 
-    def self_attention_projection(self, x):
-        batch_size, sequence_length, _ = x.shape
-        qkv = self.qkv_projection.forward_pass(input = x)
+    def self_attention_projection(self, input):
+        batch_size, sequence_length, _ = input.shape
+        self.qkv_projection.initialize_layer(optimizer)
+        qkv = self.qkv_projection.forward_pass(input)
         qkv = qkv.reshape(batch_size, sequence_length, self.num_heads, 3 * self.qkv_dim)
         query, key, value = np.array_split(qkv, 3, axis = -1)
 
@@ -36,9 +42,11 @@ class MultiHeadAttention():
         batch_size, source_sequence_length, _ = encoder_hidden_states.shape
         _, target_sequence_length, _ = decoder_hidden_states.shape
 
+        self.query_projection.initialize_layer(optimizer)
         query = self.query_projection.forward_pass(input = decoder_hidden_states)
         query = query.reshape(batch_size, target_sequence_length, self.num_heads, self.qkv_dim)
 
+        self.key_value_projection.initialize_layer(optimizer)
         key_value = self.key_value_projection.forward_pass(input = encoder_hidden_states)
         key_value = key_value.reshape(batch_size, source_sequence_length, self.num_heads, 2 * self.qkv_dim)
         key, value = np.array_split(key_value, 2, axis = -1)
@@ -46,52 +54,90 @@ class MultiHeadAttention():
         return query, key, value
 
     def mask_logits(self, logits, source_padding_mask = None, future_mask = None):
-        masked_logits = logits
 
-        if source_padding_mask is not None:
-            masked_logits = np.ma.MaskedArray(masked_logits, source_padding_mask[:, np.newaxis, np.newaxis, :] == 0)
-            # e^-inf is treated as 0 in python so, this disregards padding tokens from softmax
-            masked_logits = masked_logits.filled(fill_value = float("-inf"))
+        masked_logits = logits
+        mask = np.zeros_like(logits, dtype = bool)
+        if source_padding_mask is not None:            
+            mask |= source_padding_mask[:, np.newaxis, np.newaxis, :] == 0
 
         if future_mask is not None:
-            masked_logits = np.ma.MaskedArray(masked_logits, future_mask == 0)
-            masked_logits = masked_logits.filled(fill_value = float("-inf"))
+            mask |= future_mask
+
+        # e^-inf is treated as 0 in python so, these values are disregarded from softmax
+        masked_logits[mask] = float("-inf")
+        # Save for backward pass
+        self.combined_mask = mask
 
         return masked_logits
 
     def scaled_dot_product(self, query, key, value, source_padding_mask = None, future_mask = None):
-
         # Swapping the last two axes ensures that the matrix multiplication works even if query and key positions are not of same size
-        attention_logits = np.dot(query, np.transpose(key, -2, -1))
+        attention_logits = np.matmul(query, np.transpose(key, -2, -1))
         attention_logits = attention_logits / np.sqrt(query.shape[-1])
 
         if source_padding_mask is not None or future_mask is not None:
             attention_logits = self.mask_logits(attention_logits, source_padding_mask, future_mask)
 
-        attention = Activations_Functions.softmax(attention_logits)
-        attention_value = np.dot(attention, value)
+        self.attention = Activations_Functions.softmax(attention_logits)
+        attention_value = np.matmul(self.attention, value)
 
         return attention_value
 
     def forward_pass(self, input, encoder_hidden_states = None, source_padding_mask = None, future_mask = None):
-        batch_size, sequence_length, hidden_dim = input.size()
+        self.batch_size, self.sequence_length, self.hidden_dim = input.size()
 
-        # "input" variable should be the decoder hidden states
+        # "input" variable should be the decoder hidden states for cross attention
         if encoder_hidden_states is None:
-            query, key, value = self.self_attention_projection(input)
+            self.isSelfAttention = True
+            self.query, self.key, self.value = self.self_attention_projection(input)
         else:
-            query, key, value = self.cross_attention_projection(encoder_hidden_states, input)
+            self.query, self.key, self.value = self.cross_attention_projection(encoder_hidden_states, input)
 
         # Swapped dimesions to make matrix multiplication work for scaled dot product
-        query = query.transpose(0, 2, 1, 3)
-        key = key.transpose(0, 2, 1, 3)
-        value = value.transpose(0, 2, 1, 3)
+        self.query_transpose = self.query.transpose(0, 2, 1, 3)
+        self.key_transpose = self.key.transpose(0, 2, 1, 3)
+        self.value_transpose = self.value.transpose(0, 2, 1, 3)
 
-        values = self.scaled_dot_product(query, key, value, source_padding_mask, future_mask)
-        values = values.transpose(0, 2, 1, 3).reshape(batch_size, sequence_length, hidden_dim)
+        values = self.scaled_dot_product(self.query_transpose, self.key_transpose, self.value_transpose, source_padding_mask, future_mask)
+        values = values.transpose(0, 2, 1, 3).reshape(self.batch_size, self.sequence_length, self.hidden_dim)
 
         output = self.output_projection.forward_pass(values)
         return output
+
+    def backward_pass(self, accum_grad):
+        output_grad = self.output_projection.backward_pass(accum_grad)
+        attention_value_grad = output_grad.reshape(self.batch_size, self.num_heads, self.sequence_length, self.qkv_dim)
+        attention_value_grad = attention_value_grad.transpose(0, 2, 1, 3)
+
+        attention_grad = np.matmul(attention_value_grad, np.transpose(self.value, -2, -1))
+        value_grad = np.matmul(np.transpose(self.attention, -2, -1), attention_value_grad)
+        logits_grad = Activations_Functions.softmax_grad(self.attention, attention_grad)
+
+        if self.combined_mask is not None:
+            logits_grad[self.combined_mask] = 0
+
+        logits_grad = logits_grad / np.sqrt(self.query.shape[-1])
+        query_grad = np.matmul(logits_grad, self.key)
+        key_grad = np.matmul(np.transpose(logits_grad, -2, -1), self.query)
+
+        query_grad = query_grad.transpose(0, 2, 1, 3)
+        key_grad = key_grad.transpose(0, 2, 1, 3)
+        value_grad = value_grad.transpose(0, 2, 1, 3)
+
+        if self.isSelfAttention:
+            qkv_grad = np.resblock_output_resenate([query_grad, key_grad, value_grad], axis = -1)
+            qkv_grad = qkv_grad.reshape(self.batch_size, self.sequence_length, 3 * self.num_heads, self.qkv_dim)
+            input_grad = self.qkv_projection.backward_pass(qkv_grad)
+            return input_grad
+        
+        query_grad = query_grad.reshape(self.batch_size, self.sequence_length, self.num_heads * self.qkv_dim)
+        decoder_hidden_grad = self.query_projection.backward_pass(query_grad)
+
+        key_value_grad = np.resblock_output_resenate([key_grad, value_grad], axis = -1)
+        key_value_grad = key_value_grad.reshape(self.batch_size, self.sequence_length, 2 * self.num_heads * self.qkv_dim)
+        encoder_hidden_grad = self.key_value_projection.backward_pass(key_value_grad)
+
+        return encoder_hidden_grad, decoder_hidden_grad
 
 # Specific reference for math: https://kazemnejad.com/blog/transformer_architecture_positional_encoding/
 class PositionalEncoding():
@@ -130,13 +176,34 @@ class EncoderBlock():
         self.layer_norm2 = LayerNormalization()
 
     def forward_pass(self, input, source_padding_mask):
-        block_output = self.dropout1.forward_pass(self.mha.forward_pass(input, source_padding_mask = source_padding_mask))
-        block_output_concat = self.layer_norm1.forward_pass(input + block_output)
+        mha_output = self.mha.forward_pass(input, source_padding_mask = source_padding_mask)
+        block_output = self.dropout1.forward_pass(mha_output)
+        res_connection1 = input + block_output
+        block_output_res = self.layer_norm1.forward_pass(res_connection1)
 
-        block_output2 = self.dropout2.forward_pass(block_output_concat)
-        block_output_concat2 = self.layer_norm2.forward_pass(block_output_concat + block_output2)
+        ff_output = self.feedforward.forward_pass(block_output_res)
+        block_output2 = self.dropout2.forward_pass(ff_output)
+        res_connection2 = block_output_res + block_output2
+        block_output_res2 = self.layer_norm2.forward_pass(res_connection2)
 
-        return block_output_concat2
+        return block_output_res2
+
+    def backward_pass(self, accum_grad):
+        res_connection2_grad = self.layer_norm2.backward_pass(accum_grad)
+        block_output_res_grad = res_connection2_grad
+        block_output2_grad = res_connection2_grad
+
+        ff_output_grad = self.dropout2.backward_pass(block_output2_grad)
+        block_output_res_ff_grad = self.feedforward.backward_pass(ff_output_grad)
+        res_connection1_grad = self.layer_norm1.backward_pass(block_output_res_grad + block_output_res_ff_grad)
+
+        input_res_grad = res_connection1_grad
+        block_output_grad = res_connection1_grad
+        mha_output_grad = self.dropout1.backward_pass(block_output_grad)
+        input_mha_grad = self.mha.backward_pass(mha_output_grad)
+
+        return input_res_grad + input_mha_grad
+
 
 class DecoderBlock():
 
@@ -157,17 +224,43 @@ class DecoderBlock():
         self.layer_norm3 = LayerNormalization()
 
     def forward_pass(self, input, encoder_hidden_states, source_padding_mask, future_mask):
+        self_mha_output = self.self_mha.forward_pass(input, future_mask)
+        block_output = self.dropout1.forward_pass(self_mha_output)
+        res_connection1 = input + block_output
+        block_output_res = self.layer_norm1.forward_pass(res_connection1)
 
-        block_output = self.dropout1(self.self_mha.forward_pass(input, future_mask))
-        block_output_concat = self.layer_norm1.forward_pass(input + block_output)
+        cross_mha_output = self.cross_mha.forward_pass(block_output_res, encoder_hidden_states, source_padding_mask)
+        block_output2 = self.dropout2.forward_pass(cross_mha_output)
+        res_connection2 = block_output_res + block_output2
+        block_output_res2 = self.layer_norm2.forward_pass(res_connection2)
 
-        block_output2 = self.dropout2(self.cross_mha.forward_pass(block_output_concat, encoder_hidden_states, source_padding_mask))
-        block_output_concat2 = self.layer_norm2.forward_pass(block_output_concat + block_output2)
-
-        block_output3 = self.dropout3(self.feedforward.forward_pass(block_output_concat2))
-        block_output_concat3 = self.layer_norm2.forward_pass(block_output_concat2 + block_output3)
+        ff_output = self.feedforward.forward_pass(block_output_res2)
+        block_output3 = self.dropout3.forward_pass(ff_output)
+        res_connection3 = block_output_res2 + block_output3
+        block_output_res3 = self.layer_norm2.forward_pass(res_connection3)
         
-        return block_output_concat3
+        return block_output_res3
+
+    def backward_pass(self, accum_grad):
+        res_connection3_grad = self.layer_norm2.backward_pass(accum_grad)
+        block_output3_grad = res_connection3_grad
+        block_output_res2_grad = res_connection3_grad
+        ff_output_grad = self.dropout3.backward_pass(block_output3_grad)
+        block_output_res2_ff_grad = self.feedforward.backward_pass(ff_output_grad)
+
+        res_connection2_grad = self.layer_norm2.backward_pass(block_output_res2_grad + block_output_res2_ff_grad)
+        block_output_res_grad = res_connection2_grad
+        block_output2_grad = res_connection2_grad
+        cross_mha_output_grad = self.dropout2.backward_pass(block_output2_grad)
+        encoder_hidden_grad, block_output_res_mha_grad = self.cross_mha.backward_pass(cross_mha_output_grad)
+
+        res_connection1_grad = self.layer_norm1.backward_pass(block_output_res_grad + block_output_res_mha_grad)
+        input_grad = res_connection1_grad
+        block_output_grad = res_connection1_grad
+        self_mha_output_grad = self.dropout1.backward_pass(block_output_grad)
+        mha_input_grad = self.self_mha.backward_pass(self_mha_output_grad)
+
+        return mha_input_grad + input_grad, encoder_hidden_grad
 
 class Encoder():
 
