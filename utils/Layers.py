@@ -549,7 +549,6 @@ class Activation(Layer):
         return self.activation_function(X)
     
     def backward_pass(self, accumulated_grad):
-        # Edge case for softmax function to use full jacobian matrix
         if self.activation_name == 'softmax': 
             softmax_output = self.activation_function(self.layer_input)
             return activation_gradients['softmax_gradient'](accumulated_grad, softmax_output)
