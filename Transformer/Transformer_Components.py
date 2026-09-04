@@ -283,6 +283,15 @@ class Encoder():
 
         return output
 
+    def backward_pass(self, accum_grad):
+        output_grad = accum_grad
+        for encoder_block in self.encoder_blocks:
+            output_grad = encoder_block.backward_pass(output_grad)
+
+        output_grad = self.dropout.backward_pass(output_grad)
+        # No learnable parameters in embedding and positional encoding
+        return output_grad
+
 class Decoder():
     def __init__(self, hidden_dim, feedforward_dim, embedding, vocab_size, num_heads, num_blocks, dropout_probability):
         self.embedding = embedding
@@ -306,6 +315,14 @@ class Decoder():
         output = self.output_layer.forward_pass(output)
         return output
 
+    def backward_pass(self, accum_grad):
+        output_grad = accum_grad
+        for decoder_block in self.decoder_blocks:
+            output_grad, encoder_hidden_grad = decoder_block.backward_pass(output_grad)
+
+        output_grad = self.dropout.backward_pass(output_grad)
+        # No learnable parameters in embedding and positional encoding
+        return output_grad, encoder_hidden_grad
 
 
 
